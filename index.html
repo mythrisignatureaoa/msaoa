@@ -23,6 +23,20 @@ var API = "https://script.google.com/macros/s/AKfycbw0clxQoy5NM9268IiOUvMzaFQgqz
   var m = document.getElementById('m');
   function fail(title, text) { m.innerHTML = '<h2>' + title + '</h2><p>' + text + '</p>'; }
   var q = new URLSearchParams(location.search);
+  if (q.get('admin')) {
+    // Board tools (Make PDF, combined PDF) from the Sheet's links.
+    var esc = function (x) { return String(x || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    m.innerHTML = '<p>Working on it. This can take up to a minute.</p>';
+    q.set('json', '1');
+    fetch(API + '?' + q.toString(), { credentials: 'omit' })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        var ok = res.url && /^https:[/][/]/.test(res.url);
+        m.innerHTML = '<h2>' + esc(res.title) + '</h2><p>' + esc(res.text) + '</p>' + (ok ? '<p><a href="' + esc(res.url) + '" target="_blank" style="display:inline-block;background:#1f2a44;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold">Open</a></p>' : '');
+      })
+      .catch(function () { fail('Could not reach the form service', 'Please try again in a minute.'); });
+    return;
+  }
   var t = (q.get('t') || '').trim();
   if (!/^[A-Za-z0-9]{12,40}$/.test(t)) {
     return fail('This link is not complete', 'Please open the full link exactly as it was sent to you on WhatsApp. If it still does not work, contact the MSAOA Board at mythrisignatureaoa@gmail.com.');
