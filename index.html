@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>MSAOA – Flat &amp; Owner Details</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: #f4f1ea; color: #1f2a44; margin: 0; padding: 40px 16px; }
+  .c { max-width: 520px; margin: 0 auto; background: #fff; border-top: 5px solid #c49a3a; border-radius: 10px; padding: 24px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  h1 { font-size: 18px; margin: 0 0 4px; } h1 i { color: #c49a3a; }
+  h2 { font-size: 17px; margin: 18px 0 6px; } p { color: #555; line-height: 1.5; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="c"><h1>MYTHRI <i>Signature</i></h1><div style="font-size:11px;letter-spacing:1px;font-weight:700">APARTMENT OWNERS ASSOCIATION</div><div id="m"><p>Loading your flat details…</p></div></div>
+<script>
+// Owner form for Mythri Signature AOA. The form and data come from the association's
+// Google Apps Script; this page only loads them, so it works for people signed in to
+// several Google accounts (Google's own script pages fail for them).
+var API = "https://script.google.com/macros/s/AKfycbw0clxQoy5NM9268IiOUvMzaFQgqzmEUK5a3y2lspjQ6-UjrOK_z7RMZEFBsI4WAOlXvA/exec";
+(function () {
+  var m = document.getElementById('m');
+  function fail(title, text) { m.innerHTML = '<h2>' + title + '</h2><p>' + text + '</p>'; }
+  var q = new URLSearchParams(location.search);
+  var t = (q.get('t') || '').trim();
+  if (!/^[A-Za-z0-9]{12,40}$/.test(t)) {
+    return fail('This link is not complete', 'Please open the full link exactly as it was sent to you on WhatsApp. If it still does not work, contact the MSAOA Board at mythrisignatureaoa@gmail.com.');
+  }
+  fetch(API + '?api=load&t=' + encodeURIComponent(t) + (q.get('preview') === '1' ? '&preview=1' : ''), { credentials: 'omit' })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      if (!res || !res.ok) return fail((res && res.title) || 'Something went wrong', (res && res.text) || 'Please try again in a minute.');
+      var shim = '<script>var google={script:{run:(function(){function mk(o,b){return{withSuccessHandler:function(x){return mk(x,b)},withFailureHandler:function(x){return mk(o,x)},' +
+        'submitForm:function(t,d){fetch(' + JSON.stringify(API) + ',{method:"POST",body:JSON.stringify({t:t,data:d}),headers:{"Content-Type":"text/plain;charset=utf-8"},credentials:"omit"})' +
+        '.then(function(r){return r.json()}).then(o).catch(b)}}}return mk(function(){},function(){})})()}};<\/script>';
+      var BS = String.fromCharCode(92);
+      var data = JSON.stringify(res.payload).replace(/</g, BS + 'u003c').replace(new RegExp(String.fromCharCode(8232), 'g'), BS + 'u2028').replace(new RegExp(String.fromCharCode(8233), 'g'), BS + 'u2029');
+      var html = res.app
+        .replace('<?!= payloadJson ?>', function () { return data; })
+        .replace('<?!= logo ?>', function () { return res.logo; })
+        .replace('<head>', function () { return '<head>' + shim; });
+      document.open();
+      document.write(html);
+      document.close();
+    })
+    .catch(function () {
+      fail('Could not load your details', 'Please check your internet connection and open the link again. If it keeps failing, contact the MSAOA Board at mythrisignatureaoa@gmail.com.');
+    });
+})();
+</script>
+</body>
+</html>
