@@ -139,6 +139,8 @@ var API = "https://script.google.com/macros/s/AKfycbw0clxQoy5NM9268IiOUvMzaFQgqz
         var extra = JSON.stringify({ s: s, bs: bs });
         var shim = '<script>var google={script:{run:(function(){function mk(o,b){return{withSuccessHandler:function(x){return mk(x,b)},withFailureHandler:function(x){return mk(o,x)},' +
           'submitForm:function(t,d){var x=' + extra + ';fetch(' + JSON.stringify(API) + ',{method:"POST",body:JSON.stringify({t:t,data:d,s:x.s,bs:x.bs}),headers:{"Content-Type":"text/plain;charset=utf-8"},credentials:"omit"})' +
+          '.then(function(r){return r.json()}).then(o).catch(b)},' +
+          'esign:function(a){var x=' + extra + ';a.s=x.s;fetch(' + JSON.stringify(API) + ',{method:"POST",body:JSON.stringify({esign:a}),headers:{"Content-Type":"text/plain;charset=utf-8"},credentials:"omit"})' +
           '.then(function(r){return r.json()}).then(o).catch(b)}}}return mk(function(){},function(){})})()}};<\/script>';
         var BS = String.fromCharCode(92);
         var data = JSON.stringify(res.payload).replace(/</g, BS + 'u003c').replace(new RegExp(String.fromCharCode(8232), 'g'), BS + 'u2028').replace(new RegExp(String.fromCharCode(8233), 'g'), BS + 'u2029');
