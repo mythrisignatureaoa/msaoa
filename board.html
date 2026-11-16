@@ -194,7 +194,7 @@ function render() {
       '<td><div class="flat">' + esc(f.flat) + '</div><div class="small">' + esc(f.floor) + (f.deed ? '<br>' + esc(f.deed) : '') + '</div></td>' +
       '<td>' + (esc(f.owners) || '<span class="small">—</span>') + '<div class="small">' + (f.mobile ? esc(f.mobile) : '<b style="color:#b42318">no mobile</b>') + (f.email ? ' · ' + esc(f.email) : '') + '</div></td>' +
       '<td>' + pill(f) + '<div class="small">' + (sub ? esc(f.submitted) + (f.count > 1 ? ' (' + esc(f.count) + '×)' : '') + (f.by ? '<br>by ' + esc(f.by) : '') : (f.opened ? 'opened ' + esc(f.opened) : '')) + '</div></td>' +
-      '<td>' + (sub ? '<label class="sig"><input type="checkbox" data-sig="' + esc(f.flat) + '"' + (/^y/i.test(f.signed) ? ' checked' : '') + '> received</label><div class="small">' + esc(f.receivedOn) + '</div>' : '<span class="small">—</span>') + '</td>' +
+      '<td>' + (sub ? '<label class="sig"><input type="checkbox" data-sig="' + esc(f.flat) + '"' + (/^y/i.test(f.signed) ? ' checked' : '') + '> received</label><div class="small">' + esc(f.receivedOn) + '</div>' + (f.esign ? '<div class="small" style="color:' + (/^E-signed by all/.test(f.esign) ? '#1f7a4d' : '#b7791f') + '">✍ ' + esc(f.esign) + '</div>' : '') : '<span class="small">—</span>') + '</td>' +
       '<td><div class="acts">' +
         '<button class="btn wa" data-wa="' + esc(f.flat) + '"' + (f.mobile && f.link ? '' : ' disabled') + '>WhatsApp</button>' +
         '<button class="btn" data-copy="' + esc(f.flat) + '">Copy message</button>' +
