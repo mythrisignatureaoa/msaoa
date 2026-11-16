@@ -49,6 +49,15 @@
   #toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--navy); color:#fff; padding:10px 16px; border-radius:8px; font-size:13px; display:none; z-index:9; max-width:90%; }
   .selbar { position:sticky; bottom:0; background:var(--navy); color:#fff; padding:10px 14px; border-radius:10px; margin-top:10px; display:none; gap:10px; align-items:center; flex-wrap:wrap; }
   .selbar .btn { background:var(--gold); color:#fff; border-color:var(--gold); }
+  .qpanel { position:fixed; inset:0; background:rgba(17,24,39,.55); display:flex; align-items:flex-end; justify-content:center; z-index:8; }
+  .qbox { background:#fff; width:100%; max-width:560px; border-radius:14px 14px 0 0; padding:18px 18px 22px; max-height:88vh; overflow:auto; }
+  .qbox h3 { margin:0 0 4px; font-size:17px; }
+  .qprog { height:8px; background:#eee8da; border-radius:6px; overflow:hidden; margin:8px 0 12px; }
+  .qprog span { display:block; height:100%; background:#1f9d55; }
+  .qmsg { white-space:pre-wrap; font-size:12px; background:#f6f7f9; border:1px solid var(--line); border-radius:8px; padding:8px; max-height:160px; overflow:auto; margin:8px 0; }
+  .qbtns { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .qbtns .btn.wa { flex:1; font-size:16px; padding:12px; }
+  @media (min-width:761px) { .qpanel { align-items:center; } .qbox { border-radius:14px; } }
   @media (max-width:760px) {
     thead { display:none; } table, tbody, tr, td { display:block; width:100%; }
     tr { border-top:1px solid var(--line); padding:6px 4px; } td { border:none; padding:4px 8px; }
@@ -116,13 +125,15 @@ function gate(msg) {
   em.onkeydown = function (e) { if (e.key === 'Enter') send(); };
   document.getElementById('code').onkeydown = function (e) { if (e.key === 'Enter') verify(); };
 }
-function logout(msg) { if (SESS) post({ action: 'logout', s: SESS }).catch(function () {}); SESS = ''; store('msaoa_s', null); DATA = null; document.getElementById('upd').textContent = ''; gate(msg); }
+function logout(msg) { if (SESS) post({ action: 'logout', s: SESS }).catch(function () {}); SESS = ''; store('msaoa_s', null); DATA = null; var qp = document.getElementById('qpanel'); if (qp) qp.remove(); document.getElementById('upd').textContent = ''; gate(msg); }
 
 function load() {
+  if (!Q) Q = local('msaoa_q');
   app.innerHTML = '<p>Loading all flats…</p>';
   call({ action: 'list' }).then(function (res) {
     if (!res || !res.ok) return gate(res && res.error || 'Could not load');
     DATA = res; document.getElementById('upd').textContent = res.email + ' · updated ' + res.updated; render();
+    if (Q && Q.list) { Q.list = Q.list.filter(function (k) { return byFlat(k); }); qShow(); }
   }).catch(function (e) { if (e && e.message === 'auth') return; app.innerHTML = '<p>Could not reach the form service. <button class="btn" onclick="load()">Try again</button></p>'; });
 }
 
@@ -193,7 +204,7 @@ function render() {
   });
   if (!list.length) h += '<tr><td colspan="6" class="small" style="padding:20px;text-align:center">No flats match.</td></tr>';
   h += '</tbody></table><div class="small" style="margin-top:6px">' + list.length + ' of ' + all.length + ' flats shown. “View form” opens a preview that does not mark the flat as opened.</div>';
-  h += '<div class="selbar" id="selbar"><span id="selc"></span><button class="btn" id="print">Print selected (PDF)</button><button class="btn" id="copyall">Copy their messages</button></div>';
+  h += '<div class="selbar" id="selbar"><span id="selc"></span><button class="btn" id="qstart" style="background:#1f9d55;border-color:#1f9d55">Send WhatsApp one by one</button><button class="btn" id="print">Print selected (PDF)</button><button class="btn" id="copyall">Copy their messages</button></div>';
   app.innerHTML = h;
   document.getElementById('fb').value = filt.block; document.getElementById('fs').value = filt.status;
   updSel();
@@ -211,6 +222,54 @@ function copy(t) {
 }
 function fallbackCopy(t) { var a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); toast('Copied'); } catch (e) { toast('Could not copy'); } a.remove(); }
 
+// ---- WhatsApp send queue: opens each selected owner's chat in turn (one tap each) ----
+var Q = null; // { list:[flat], i:index, done:{flat:1}, skipped:{flat:1} }
+function qSave() { if (Q) local('msaoa_q', Q); else store('msaoa_q', null); }
+function qStart() {
+  var ks = Object.keys(sel).sort(), ok = [], nomob = [];
+  ks.forEach(function (k) { var r = byFlat(k); if (!r) return; if (r.mobile && r.link) ok.push(k); else nomob.push(k); });
+  if (!ok.length) return toast('None of the selected flats has a mobile number', 3500);
+  var prev = ok.filter(function (k) { return sent[k]; });
+  Q = { list: ok, i: 0, done: {}, skipped: {}, nomob: nomob, prevCount: prev.length, skipPrev: false };
+  qSave(); qShow();
+}
+function qCur() { return Q && Q.i < Q.list.length ? Q.list[Q.i] : null; }
+function qAdvance() {
+  while (Q.i < Q.list.length && (Q.done[Q.list[Q.i]] || Q.skipped[Q.list[Q.i]] || (Q.skipPrev && sent[Q.list[Q.i]]))) Q.i++;
+}
+function qShow() {
+  var old = document.getElementById('qpanel'); if (old) old.remove();
+  if (!Q || !DATA) return;
+  qAdvance(); qSave();
+  var n = Q.list.length, nd = Object.keys(Q.done).length, f = qCur(), r = f && byFlat(f), h;
+  h = '<div class="qpanel" id="qpanel"><div class="qbox">';
+  if (!f) {
+    var sk = Object.keys(Q.skipped).length;
+    h += '<h3>All done</h3><div class="small">Opened WhatsApp for ' + nd + ' of ' + n + ' owner' + (n === 1 ? '' : 's') + (sk ? ', skipped ' + sk : '') + '.</div>' +
+      (Q.nomob.length ? '<p class="small" style="color:#b42318">No mobile number, not included: ' + esc(Q.nomob.join(', ')) + '</p>' : '') +
+      '<div class="qbtns"><button class="btn pri" id="qclose">Close</button></div>';
+  } else {
+    h += '<h3>Send WhatsApp · ' + (nd + 1) + ' of ' + n + '</h3>' +
+      '<div class="qprog"><span style="width:' + (100 * nd / n) + '%"></span></div>' +
+      '<div><span class="flat">' + esc(f) + '</span> · ' + esc(r.owners || '') + '</div>' +
+      '<div class="small">' + esc(r.mobile) + (sent[f] ? ' · <b style="color:#b45309">already messaged ' + esc(sent[f]) + ' from this device</b>' : '') + '</div>' +
+      '<div class="qmsg">' + esc(r.msg) + '</div>' +
+      (Q.prevCount ? '<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="qskipprev"' + (Q.skipPrev ? ' checked' : '') + '> Skip flats already messaged from this device (' + Q.prevCount + ')</label>' : '') +
+      '<div class="qbtns"><button class="btn wa" id="qopen">Open WhatsApp for ' + esc(f) + '</button></div>' +
+      '<div class="qbtns"><button class="btn" id="qskip">Skip this flat</button><button class="btn" id="qstop">Stop</button></div>' +
+      '<p class="small" style="margin:10px 0 0">Tap the green button, press <b>Send</b> in WhatsApp, then come back here. The next owner will be ready.</p>';
+  }
+  h += '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', h);
+}
+function qOpen() {
+  var f = qCur(), r = f && byFlat(f); if (!r) return;
+  window.open('https://wa.me/' + waNum(r.mobile) + '?text=' + encodeURIComponent(r.msg), '_blank');
+  sent[f] = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); local('msaoa_sent', sent);
+  Q.done[f] = 1; Q.i++; qSave(); render(); qShow();
+}
+function qEnd() { Q = null; qSave(); var p = document.getElementById('qpanel'); if (p) p.remove(); render(); }
+
 function openPdf(flats) {
   var w = window.open('', '_blank');
   if (w) w.document.write('<p style="font-family:sans-serif;padding:20px">Preparing the PDF… this can take up to a minute.</p>');
@@ -227,8 +286,13 @@ function openPdf(flats) {
 }
 
 document.addEventListener('click', function (e) {
-  var t = e.target.closest('[data-st],[data-wa],[data-copy],[data-pdf],#selall,#selnone,#print,#copyall');
+  var t = e.target.closest('[data-st],[data-wa],[data-copy],[data-pdf],#selall,#selnone,#print,#copyall,#qstart,#qopen,#qskip,#qstop,#qclose');
   if (!t) return;
+  if (t.id === 'qstart') return qStart();
+  if (t.id === 'qopen') return qOpen();
+  if (t.id === 'qskip') { Q.skipped[qCur()] = 1; Q.i++; return qShow(); }
+  if (t.id === 'qstop') { if (Object.keys(Q.done).length) toast('Stopped. ' + Object.keys(Q.done).length + ' sent.', 3000); return qEnd(); }
+  if (t.id === 'qclose') { sel = {}; return qEnd(); }
   if (t.hasAttribute('data-st')) { filt.status = t.getAttribute('data-st'); return render(); }
   var f;
   if ((f = t.getAttribute('data-wa'))) {
@@ -264,6 +328,7 @@ document.addEventListener('change', function (e) {
     }).catch(function () { t.checked = !want; t.disabled = false; toast('Could not reach the form service', 3500); });
     return;
   }
+  if (t.id === 'qskipprev') { Q.skipPrev = t.checked; return qShow(); }
   if (t.id === 'fb') { filt.block = t.value; return render(); }
   if (t.id === 'fs') { filt.status = t.value; return render(); }
 });
