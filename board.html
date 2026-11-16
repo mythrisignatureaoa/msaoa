@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>MSAOA – Board: Owner Details</title>
+<style>
+  :root { --navy:#1f2a44; --gold:#c49a3a; --cream:#f4f1ea; --line:#e5e1d6; --muted:#6b7280; --green:#1f7a4d; --amber:#b7791f; --red:#b42318; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif; background:var(--cream); color:var(--navy); font-size:14px; }
+  header { background:var(--navy); color:#fff; padding:14px 18px; border-bottom:4px solid var(--gold); display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; } header h1 i { color:var(--gold); font-style:italic; }
+  header .sub { font-size:12px; opacity:.8; }
+  header .right { margin-left:auto; display:flex; gap:8px; align-items:center; font-size:12px; }
+  main { max-width:1200px; margin:0 auto; padding:16px; }
+  .btn { border:1px solid var(--line); background:#fff; color:var(--navy); border-radius:8px; padding:7px 11px; font-size:13px; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+  .btn:hover { border-color:var(--gold); }
+  .btn.pri { background:var(--navy); color:#fff; border-color:var(--navy); }
+  .btn.wa { background:#1f9d55; color:#fff; border-color:#1f9d55; }
+  .btn:disabled { opacity:.45; cursor:default; }
+  header .btn { background:transparent; color:#fff; border-color:rgba(255,255,255,.4); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:14px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 14px; cursor:pointer; }
+  .card.on { outline:2px solid var(--gold); }
+  .card .n { font-size:26px; font-weight:700; } .card .l { font-size:12px; color:var(--muted); }
+  .blocks { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-bottom:14px; }
+  .blk { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 14px; }
+  .bar { height:10px; background:#eee8da; border-radius:6px; overflow:hidden; display:flex; margin-top:6px; }
+  .bar span { display:block; height:100%; }
+  .legend { font-size:11px; color:var(--muted); margin-top:4px; }
+  .tools { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  .tools input[type=search], .tools select { padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px; background:#fff; }
+  .tools input[type=search] { flex:1; min-width:180px; }
+  table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  th { background:var(--navy); color:#fff; text-align:left; font-size:12px; padding:8px; position:sticky; top:0; }
+  td { border-top:1px solid var(--line); padding:8px; vertical-align:top; }
+  tr.sel td { background:#fbf6ea; }
+  .flat { font-weight:700; font-size:15px; }
+  .small { font-size:12px; color:var(--muted); }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:600; }
+  .p-sub { background:#e6f4ec; color:var(--green); } .p-open { background:#fdf3e1; color:var(--amber); } .p-not { background:#eef0f3; color:#4b5563; } .p-lock { background:#fde8e7; color:var(--red); }
+  .acts { display:flex; gap:6px; flex-wrap:wrap; }
+  .sent { color:var(--green); font-size:11px; }
+  .sig { display:inline-flex; align-items:center; gap:4px; font-size:12px; cursor:pointer; }
+  .gate { max-width:420px; margin:60px auto; background:#fff; border-top:5px solid var(--gold); border-radius:10px; padding:24px; }
+  .gate input { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:15px; margin:10px 0; }
+  #toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--navy); color:#fff; padding:10px 16px; border-radius:8px; font-size:13px; display:none; z-index:9; max-width:90%; }
+  .selbar { position:sticky; bottom:0; background:var(--navy); color:#fff; padding:10px 14px; border-radius:10px; margin-top:10px; display:none; gap:10px; align-items:center; flex-wrap:wrap; }
+  .selbar .btn { background:var(--gold); color:#fff; border-color:var(--gold); }
+  @media (max-width:760px) {
+    thead { display:none; } table, tbody, tr, td { display:block; width:100%; }
+    tr { border-top:1px solid var(--line); padding:6px 4px; } td { border:none; padding:4px 8px; }
+    td.cb { float:right; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>MYTHRI <i>Signature</i> · Board</h1><div class="sub">Flat &amp; Owner Details — who has filled, messages and printing</div></div>
+  <div class="right"><span id="upd"></span><button class="btn" id="reload">↻ Refresh</button><button class="btn" id="logout">Log out</button></div>
+</header>
+<main id="app"><p>Loading…</p></main>
+<div id="toast"></div>
+<script>
+// Board dashboard for the MSAOA owner details form. Data comes from the association's
+// Google Apps Script and needs a Board member login (email + one-time code).
+var API = "https://script.google.com/macros/s/AKfycbw0clxQoy5NM9268IiOUvMzaFQgqzmEUK5a3y2lspjQ6-UjrOK_z7RMZEFBsI4WAOlXvA/exec";
+var FORM = "https://mythrisignatureaoa.github.io/msaoa/";
+var app = document.getElementById('app');
+var SESS = '', DATA = null, sel = {}, filt = { q: '', block: '', status: '' };
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} return null; }
+function local(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null'); localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} return null; }
+function esc(x) { return String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function toast(t, ms) { var e = document.getElementById('toast'); e.textContent = t; e.style.display = 'block'; clearTimeout(toast.h); toast.h = setTimeout(function () { e.style.display = 'none'; }, ms || 2500); }
+function post(b) {
+  return fetch(API, { method: 'POST', body: JSON.stringify({ board: b }), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, credentials: 'omit' })
+    .then(function (r) { return r.json(); });
+}
+function call(params) {
+  params.s = SESS;
+  return post(params).then(function (res) { if (res && res.auth) { logout(res.error); throw new Error('auth'); } return res; });
+}
+var sent = local('msaoa_sent') || {};
+
+function gate(msg) {
+  app.innerHTML = '<div class="gate"><h2 style="margin-top:0">Board login</h2><p class="small">For the seven members of the MSAOA Board of Managers. Enter your email; we will send a 6-digit login code to it.' +
+    (msg ? '<br><b style="color:#b42318">' + esc(msg) + '</b>' : '') + '</p>' +
+    '<input id="em" type="email" autocomplete="email" placeholder="Your email" value="' + esc(store('msaoa_em') || '') + '"><button class="btn pri" id="send">Send login code</button>' +
+    '<div id="step2" style="display:none;margin-top:14px"><p class="small" id="sentto"></p><input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code">' +
+    '<button class="btn pri" id="verify">Log in</button> <button class="btn" id="resend">Send again</button></div></div>';
+  var em = document.getElementById('em');
+  var send = function () {
+    var v = em.value.trim(); if (!v) return;
+    var b = document.getElementById('send'); b.disabled = true; b.textContent = 'Sending…';
+    post({ action: 'otp', email: v }).then(function (res) {
+      b.disabled = false; b.textContent = 'Send login code';
+      if (!res.ok) return toast(res.error || 'Could not send the code', 5000);
+      store('msaoa_em', v.toLowerCase());
+      document.getElementById('step2').style.display = 'block';
+      document.getElementById('sentto').textContent = 'Code sent to ' + v + '. It is valid for 10 minutes; check spam if you do not see it.';
+      document.getElementById('code').focus();
+    }).catch(function () { b.disabled = false; b.textContent = 'Send login code'; toast('Could not reach the form service', 4000); });
+  };
+  var verify = function () {
+    var c = document.getElementById('code').value.trim(); if (!/^\d{6}$/.test(c)) return toast('Enter the 6-digit code');
+    post({ action: 'verify', email: em.value.trim(), code: c }).then(function (res) {
+      if (!res.ok) return toast(res.error || 'Login failed', 4000);
+      SESS = res.s; store('msaoa_s', SESS); load();
+    }).catch(function () { toast('Could not reach the form service', 4000); });
+  };
+  document.getElementById('send').onclick = send;
+  document.getElementById('resend').onclick = send;
+  document.getElementById('verify').onclick = verify;
+  em.onkeydown = function (e) { if (e.key === 'Enter') send(); };
+  document.getElementById('code').onkeydown = function (e) { if (e.key === 'Enter') verify(); };
+}
+function logout(msg) { if (SESS) post({ action: 'logout', s: SESS }).catch(function () {}); SESS = ''; store('msaoa_s', null); DATA = null; document.getElementById('upd').textContent = ''; gate(msg); }
+
+function load() {
+  app.innerHTML = '<p>Loading all flats…</p>';
+  call({ action: 'list' }).then(function (res) {
+    if (!res || !res.ok) return gate(res && res.error || 'Could not load');
+    DATA = res; document.getElementById('upd').textContent = res.email + ' · updated ' + res.updated; render();
+  }).catch(function (e) { if (e && e.message === 'auth') return; app.innerHTML = '<p>Could not reach the form service. <button class="btn" onclick="load()">Try again</button></p>'; });
+}
+
+function stOf(f) { if (/^y/i.test(f.locked)) return 'Locked'; return f.status || 'Not opened'; }
+function pill(f) {
+  var s = stOf(f), c = s === 'Submitted' ? 'p-sub' : s === 'Opened' ? 'p-open' : s === 'Locked' ? 'p-lock' : 'p-not';
+  return '<span class="pill ' + c + '">' + esc(s) + '</span>';
+}
+function waNum(m) { m = String(m || '').replace(/\D/g, ''); if (m.length === 10) return '91' + m; if (m.length === 11 && m[0] === '0') return '91' + m.slice(1); return m; }
+
+function counts(list) {
+  var c = { total: list.length, not: 0, open: 0, sub: 0, signed: 0, pend: 0, nomob: 0 };
+  list.forEach(function (f) {
+    var s = stOf(f);
+    if (s === 'Submitted') { c.sub++; if (/^y/i.test(f.signed)) c.signed++; else c.pend++; }
+    else if (s === 'Opened') c.open++; else c.not++;
+    if (!f.mobile) c.nomob++;
+  });
+  return c;
+}
+
+function matches(f) {
+  if (filt.block && f.block !== filt.block) return false;
+  var s = stOf(f);
+  if (filt.status === 'not' && s !== 'Not opened') return false;
+  if (filt.status === 'open' && s !== 'Opened') return false;
+  if (filt.status === 'sub' && s !== 'Submitted') return false;
+  if (filt.status === 'pend' && !(s === 'Submitted' && !/^y/i.test(f.signed))) return false;
+  if (filt.status === 'signed' && !/^y/i.test(f.signed)) return false;
+  if (filt.status === 'nomsg' && sent[f.flat]) return false;
+  if (filt.status === 'nomob' && f.mobile) return false;
+  if (filt.q) { var q = filt.q.toLowerCase(); if ((f.flat + ' ' + f.owners + ' ' + f.mobile + ' ' + f.email).toLowerCase().indexOf(q) < 0) return false; }
+  return true;
+}
+
+function render() {
+  var all = DATA.flats, c = counts(all);
+  var card = function (k, n, l) { return '<div class="card' + (filt.status === k ? ' on' : '') + '" data-st="' + k + '"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>'; };
+  var h = '<div class="cards">' + card('', c.total, 'All flats') + card('not', c.not, 'Not opened yet') + card('open', c.open, 'Opened, not submitted') +
+    card('sub', c.sub, 'Submitted online') + card('pend', c.pend, 'Submitted, signed copy pending') + card('signed', c.signed, 'Signed copy received') + '</div>';
+  h += '<div class="blocks">';
+  ['A', 'B', 'C'].forEach(function (b) {
+    var l = all.filter(function (f) { return f.block === b; }), k = counts(l), pc = function (n) { return l.length ? (100 * n / l.length) : 0; };
+    h += '<div class="blk"><b>Block ' + b + '</b> <span class="small">· ' + k.sub + ' of ' + l.length + ' submitted (' + Math.round(pc(k.sub)) + '%)</span>' +
+      '<div class="bar"><span style="width:' + pc(k.signed) + '%;background:#1f7a4d"></span><span style="width:' + pc(k.pend) + '%;background:#7cc4a0"></span><span style="width:' + pc(k.open) + '%;background:#e3b45c"></span></div>' +
+      '<div class="legend">■ signed ' + k.signed + ' · submitted ' + k.pend + ' · opened ' + k.open + ' · not opened ' + k.not + '</div></div>';
+  });
+  h += '</div>';
+  h += '<div class="tools"><input type="search" id="q" placeholder="Search flat, owner, mobile, email" value="' + esc(filt.q) + '">' +
+    '<select id="fb"><option value="">All blocks</option><option>A</option><option>B</option><option>C</option></select>' +
+    '<select id="fs"><option value="">Any status</option><option value="not">Not opened</option><option value="open">Opened</option><option value="sub">Submitted</option><option value="pend">Signed copy pending</option><option value="signed">Signed copy received</option><option value="nomsg">Not messaged from this device</option><option value="nomob">No mobile number</option></select>' +
+    '<button class="btn" id="selall">Select shown</button><button class="btn" id="selnone">Clear</button></div>';
+  var list = all.filter(matches);
+  h += '<table><thead><tr><th style="width:28px"></th><th>Flat</th><th>Owners</th><th>Status</th><th>Signed copy</th><th>Actions</th></tr></thead><tbody>';
+  list.forEach(function (f) {
+    var s = stOf(f), sub = s === 'Submitted';
+    h += '<tr' + (sel[f.flat] ? ' class="sel"' : '') + '><td class="cb"><input type="checkbox" data-sel="' + esc(f.flat) + '"' + (sel[f.flat] ? ' checked' : '') + '></td>' +
+      '<td><div class="flat">' + esc(f.flat) + '</div><div class="small">' + esc(f.floor) + (f.deed ? '<br>' + esc(f.deed) : '') + '</div></td>' +
+      '<td>' + (esc(f.owners) || '<span class="small">—</span>') + '<div class="small">' + (f.mobile ? esc(f.mobile) : '<b style="color:#b42318">no mobile</b>') + (f.email ? ' · ' + esc(f.email) : '') + '</div></td>' +
+      '<td>' + pill(f) + '<div class="small">' + (sub ? esc(f.submitted) + (f.count > 1 ? ' (' + esc(f.count) + '×)' : '') + (f.by ? '<br>by ' + esc(f.by) : '') : (f.opened ? 'opened ' + esc(f.opened) : '')) + '</div></td>' +
+      '<td>' + (sub ? '<label class="sig"><input type="checkbox" data-sig="' + esc(f.flat) + '"' + (/^y/i.test(f.signed) ? ' checked' : '') + '> received</label><div class="small">' + esc(f.receivedOn) + '</div>' : '<span class="small">—</span>') + '</td>' +
+      '<td><div class="acts">' +
+        '<button class="btn wa" data-wa="' + esc(f.flat) + '"' + (f.mobile && f.link ? '' : ' disabled') + '>WhatsApp</button>' +
+        '<button class="btn" data-copy="' + esc(f.flat) + '">Copy message</button>' +
+        '<a class="btn" target="_blank" rel="noopener" href="' + esc(f.preview) + '">View form</a>' +
+        '<button class="btn" data-pdf="' + esc(f.flat) + '"' + (sub ? '' : ' disabled title="Owner has not submitted yet"') + '>PDF</button>' +
+      '</div>' + (sent[f.flat] ? '<div class="sent">✓ messaged ' + esc(sent[f.flat]) + ' (this device)</div>' : '') + '</td></tr>';
+  });
+  if (!list.length) h += '<tr><td colspan="6" class="small" style="padding:20px;text-align:center">No flats match.</td></tr>';
+  h += '</tbody></table><div class="small" style="margin-top:6px">' + list.length + ' of ' + all.length + ' flats shown. “View form” opens a preview that does not mark the flat as opened.</div>';
+  h += '<div class="selbar" id="selbar"><span id="selc"></span><button class="btn" id="print">Print selected (PDF)</button><button class="btn" id="copyall">Copy their messages</button></div>';
+  app.innerHTML = h;
+  document.getElementById('fb').value = filt.block; document.getElementById('fs').value = filt.status;
+  updSel();
+}
+
+function byFlat(f) { return DATA.flats.find(function (x) { return x.flat === f; }); }
+function updSel() {
+  var n = Object.keys(sel).length, bar = document.getElementById('selbar');
+  if (!bar) return; bar.style.display = n ? 'flex' : 'none';
+  document.getElementById('selc').textContent = n + ' flat' + (n === 1 ? '' : 's') + ' selected';
+}
+function copy(t) {
+  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).then(function () { toast('Copied'); }, function () { fallbackCopy(t); });
+  fallbackCopy(t);
+}
+function fallbackCopy(t) { var a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); toast('Copied'); } catch (e) { toast('Could not copy'); } a.remove(); }
+
+function openPdf(flats) {
+  var w = window.open('', '_blank');
+  if (w) w.document.write('<p style="font-family:sans-serif;padding:20px">Preparing the PDF… this can take up to a minute.</p>');
+  toast('Preparing PDF…', 60000);
+  call({ action: 'pdfdata', flats: flats.join(',') }).then(function (res) {
+    if (!res.ok) { if (w) w.close(); return toast(res.error || 'Could not make the PDF', 4000); }
+    var bin = atob(res.data), u8 = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    var url = URL.createObjectURL(new Blob([u8], { type: 'application/pdf' }));
+    if (w) w.location.href = url;
+    else { var a = document.createElement('a'); a.href = url; a.download = res.name; document.body.appendChild(a); a.click(); a.remove(); }
+    toast('PDF ready: ' + res.name, 3000);
+  }).catch(function (e) { if (w) w.close(); if (!e || e.message !== 'auth') toast('Could not reach the form service', 4000); });
+}
+
+document.addEventListener('click', function (e) {
+  var t = e.target.closest('[data-st],[data-wa],[data-copy],[data-pdf],#selall,#selnone,#print,#copyall');
+  if (!t) return;
+  if (t.hasAttribute('data-st')) { filt.status = t.getAttribute('data-st'); return render(); }
+  var f;
+  if ((f = t.getAttribute('data-wa'))) {
+    var r = byFlat(f); if (!r || !r.mobile) return;
+    window.open('https://wa.me/' + waNum(r.mobile) + '?text=' + encodeURIComponent(r.msg), '_blank');
+    sent[f] = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); local('msaoa_sent', sent);
+    return render();
+  }
+  if ((f = t.getAttribute('data-copy'))) { var r2 = byFlat(f); return copy(r2.msg); }
+  if ((f = t.getAttribute('data-pdf'))) return openPdf([f]);
+  if (t.id === 'selall') { DATA.flats.filter(matches).forEach(function (x) { sel[x.flat] = 1; }); return render(); }
+  if (t.id === 'selnone') { sel = {}; return render(); }
+  if (t.id === 'print') {
+    var ks = Object.keys(sel).filter(function (k) { var r3 = byFlat(k); return r3 && stOf(r3) === 'Submitted'; });
+    var skip = Object.keys(sel).length - ks.length;
+    if (!ks.length) return toast('None of the selected flats has submitted yet', 3500);
+    if (ks.length > 40) return toast('Please select at most 40 submitted flats per print', 3500);
+    if (skip) toast(skip + ' not-submitted flat(s) left out', 3000);
+    return openPdf(ks.sort());
+  }
+  if (t.id === 'copyall') {
+    return copy(Object.keys(sel).sort().map(function (k) { var r4 = byFlat(k); return r4 ? 'Flat ' + k + ' (' + (r4.mobile || 'no mobile') + '):\n' + r4.msg : ''; }).join('\n\n----------\n\n'));
+  }
+});
+document.addEventListener('change', function (e) {
+  var t = e.target, f;
+  if ((f = t.getAttribute('data-sel'))) { if (t.checked) sel[f] = 1; else delete sel[f]; t.closest('tr').className = t.checked ? 'sel' : ''; return updSel(); }
+  if ((f = t.getAttribute('data-sig'))) {
+    var want = t.checked; t.disabled = true;
+    call({ action: 'signed', flat: f, v: want ? 'Yes' : 'No' }).then(function (res) {
+      if (!res.ok) { t.checked = !want; t.disabled = false; return toast(res.error || 'Could not save', 3500); }
+      var r = byFlat(f); r.signed = res.signed; r.receivedOn = res.receivedOn; toast('Flat ' + f + ': signed copy ' + (want ? 'received' : 'unmarked')); render();
+    }).catch(function () { t.checked = !want; t.disabled = false; toast('Could not reach the form service', 3500); });
+    return;
+  }
+  if (t.id === 'fb') { filt.block = t.value; return render(); }
+  if (t.id === 'fs') { filt.status = t.value; return render(); }
+});
+document.addEventListener('input', function (e) {
+  if (e.target.id === 'q') { filt.q = e.target.value; clearTimeout(window._qt); window._qt = setTimeout(function () { var p = e.target.selectionStart; render(); var q = document.getElementById('q'); q.focus(); q.setSelectionRange(p, p); }, 250); }
+});
+document.getElementById('reload').onclick = function () { if (SESS) load(); };
+document.getElementById('logout').onclick = function () { logout(); };
+
+(function () {
+  SESS = store('msaoa_s') || '';
+  if (SESS) load(); else gate();
+})();
+</script>
+</body>
+</html>
