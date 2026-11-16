@@ -4,63 +4,163 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
 <title>MSAOA – Flat &amp; Owner Details</title>
 <style>
   body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: #f4f1ea; color: #1f2a44; margin: 0; padding: 40px 16px; }
   .c { max-width: 520px; margin: 0 auto; background: #fff; border-top: 5px solid #c49a3a; border-radius: 10px; padding: 24px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
   h1 { font-size: 18px; margin: 0 0 4px; } h1 i { color: #c49a3a; }
   h2 { font-size: 17px; margin: 18px 0 6px; } p { color: #555; line-height: 1.5; font-size: 14px; }
+  input { width: 100%; box-sizing: border-box; padding: 11px; border: 1px solid #ddd6c6; border-radius: 8px; font-size: 16px; margin: 8px 0; text-align: center; }
+  .btn { display: block; width: 100%; box-sizing: border-box; background: #1f2a44; color: #fff; border: 0; padding: 12px; border-radius: 8px; font-size: 15px; font-weight: 600; margin: 8px 0; cursor: pointer; text-decoration: none; }
+  .btn.alt { background: #fff; color: #1f2a44; border: 1px solid #ddd6c6; }
+  .btn:disabled { opacity: .5; }
+  .msg { font-size: 13px; color: #b42318; min-height: 18px; }
+  .ok { color: #1f7a4d; }
+  .small { font-size: 12px; color: #6b7280; }
 </style>
 </head>
 <body>
-<div class="c"><h1>MYTHRI <i>Signature</i></h1><div style="font-size:11px;letter-spacing:1px;font-weight:700">APARTMENT OWNERS ASSOCIATION</div><div id="m"><p>Loading your flat details…</p></div></div>
+<div class="c"><h1>MYTHRI <i>Signature</i></h1><div style="font-size:11px;letter-spacing:1px;font-weight:700">APARTMENT OWNERS ASSOCIATION</div><div id="m"><p>Loading…</p></div></div>
 <script>
 // Owner form for Mythri Signature AOA. The form and data come from the association's
 // Google Apps Script; this page only loads them, so it works for people signed in to
 // several Google accounts (Google's own script pages fail for them).
+// First visit: the personal link opens the form. After a flat has submitted, owners log in
+// with a code sent to an owner email on record (session 1 hour).
 var API = "https://script.google.com/macros/s/AKfycbw0clxQoy5NM9268IiOUvMzaFQgqzmEUK5a3y2lspjQ6-UjrOK_z7RMZEFBsI4WAOlXvA/exec";
 (function () {
   var m = document.getElementById('m');
-  function fail(title, text) { m.innerHTML = '<h2>' + title + '</h2><p>' + text + '</p>'; }
+  var esc = function (x) { return String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  function fail(title, text) { m.innerHTML = '<h2>' + esc(title) + '</h2><p>' + esc(text) + '</p>'; }
+  function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} return null; }
+  function ownerSess() { try { var o = JSON.parse(ls('msaoa_os') || 'null'); if (o && o.exp > Date.now()) return o.s; } catch (e) {} ls('msaoa_os', null); return ''; }
+  function post(o) {
+    return fetch(API, { method: 'POST', body: JSON.stringify({ owner: o }), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, credentials: 'omit' }).then(function (r) { return r.json(); });
+  }
   var q = new URLSearchParams(location.search);
+
   if (q.get('admin')) {
     // Board tools (Make PDF, combined PDF) from the Sheet's links.
-    var esc = function (x) { return String(x || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
     m.innerHTML = '<p>Working on it. This can take up to a minute.</p>';
     q.set('json', '1');
     fetch(API + '?' + q.toString(), { credentials: 'omit' })
       .then(function (r) { return r.json(); })
       .then(function (res) {
         var ok = res.url && /^https:[/][/]/.test(res.url);
-        m.innerHTML = '<h2>' + esc(res.title) + '</h2><p>' + esc(res.text) + '</p>' + (ok ? '<p><a href="' + esc(res.url) + '" target="_blank" style="display:inline-block;background:#1f2a44;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold">Open</a></p>' : '');
+        m.innerHTML = '<h2>' + esc(res.title) + '</h2><p>' + esc(res.text) + '</p>' + (ok ? '<p><a href="' + esc(res.url) + '" target="_blank" class="btn">Open</a></p>' : '');
       })
       .catch(function () { fail('Could not reach the form service', 'Please try again in a minute.'); });
     return;
   }
+
+  function saveSession(res) { ls('msaoa_os', JSON.stringify({ s: res.s, exp: Date.now() + (res.minutes || 60) * 60000 - 60000 })); }
+
+  // ---- code entry shared by both login screens ----
+  function codeStep(intro, verifyBody, done) {
+    var box = document.getElementById('step2');
+    box.innerHTML = '<p class="small">' + esc(intro) + '</p><input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code"><button class="btn" id="vb">Log in</button><div class="msg" id="vm"></div>';
+    var code = document.getElementById('code'); code.focus();
+    var go = function () {
+      var c = code.value.trim(), vm = document.getElementById('vm');
+      if (!/^[0-9]{6}$/.test(c)) { vm.textContent = 'Enter the 6-digit code from the email.'; return; }
+      var b = document.getElementById('vb'); b.disabled = true; vm.textContent = '';
+      var body = Object.assign({ action: 'verify', code: c }, verifyBody);
+      post(body).then(function (res) {
+        b.disabled = false;
+        if (!res.ok) { vm.textContent = res.error || 'Login failed.'; return; }
+        saveSession(res); done(res);
+      }).catch(function () { b.disabled = false; vm.textContent = 'Could not reach the form service. Please try again.'; });
+    };
+    document.getElementById('vb').onclick = go;
+    code.onkeydown = function (e) { if (e.key === 'Enter') go(); };
+  }
+
+  // ---- common login page (no personal link) ----
+  function commonLogin(note) {
+    m.innerHTML = '<h2>Owner login</h2><p>Enter an email on record for your flat. We will send you a 6-digit code.</p>' +
+      (note ? '<p class="msg">' + esc(note) + '</p>' : '') +
+      '<input id="em" type="email" autocomplete="email" placeholder="Your email"><button class="btn" id="sb">Send code</button><div class="msg" id="sm"></div><div id="step2"></div>' +
+      '<p class="small">Not submitted your details yet? Please use the personal link the Board sent you on WhatsApp.</p>';
+    var em = document.getElementById('em');
+    var send = function () {
+      var v = em.value.trim(), sm = document.getElementById('sm');
+      if (!v) return;
+      var b = document.getElementById('sb'); b.disabled = true; sm.textContent = '';
+      post({ action: 'code', email: v }).then(function (res) {
+        b.disabled = false;
+        if (!res.ok) { sm.textContent = res.error || 'Could not send the code.'; return; }
+        b.textContent = 'Send again';
+        codeStep(res.text, { email: v }, function (r) {
+          if (!r.flats || !r.flats.length) return commonLogin('No submitted flat found for this email.');
+          if (r.flats.length === 1) { location.href = '?t=' + encodeURIComponent(r.flats[0].t); return; }
+          m.innerHTML = '<h2>Choose your flat</h2>' + r.flats.map(function (f) {
+            return '<a class="btn alt" href="?t=' + encodeURIComponent(f.t) + '">Flat ' + esc(f.flat) + (f.owners ? '<br><span class="small">' + esc(f.owners) + '</span>' : '') + '</a>';
+          }).join('');
+        });
+      }).catch(function () { b.disabled = false; sm.textContent = 'Could not reach the form service. Please try again.'; });
+    };
+    document.getElementById('sb').onclick = send;
+    em.onkeydown = function (e) { if (e.key === 'Enter') send(); };
+  }
+
+  // ---- login from a personal link of a flat that has already submitted ----
+  function flatLogin(t, res) {
+    var list = res.emails || [];
+    if (!list.length) return fail('Please contact the MSAOA Board', 'There is no email on record for Flat ' + res.flat + ' to send a login code to. Please contact the Board at mythrisignatureaoa@gmail.com or 74117 64461.');
+    m.innerHTML = '<h2>Flat ' + esc(res.flat) + ' — log in</h2><p>' + esc(res.text) + '</p><p class="small">Send the code to:</p>' +
+      list.map(function (e) { return '<button class="btn alt" data-i="' + e.i + '">' + esc(e.label) + '</button>'; }).join('') +
+      '<div class="msg" id="sm"></div><div id="step2"></div>';
+    Array.prototype.forEach.call(m.querySelectorAll('[data-i]'), function (b) {
+      b.onclick = function () {
+        var i = b.getAttribute('data-i'), sm = document.getElementById('sm');
+        b.disabled = true; sm.textContent = '';
+        post({ action: 'codeForFlat', t: t, i: i }).then(function (r) {
+          b.disabled = false;
+          if (!r.ok) { sm.textContent = r.error || 'Could not send the code.'; return; }
+          codeStep('Code sent to ' + r.sentTo + '. It is valid for 10 minutes; check spam if you do not see it.', { t: t, i: i }, function () { load(t); });
+        }).catch(function () { b.disabled = false; sm.textContent = 'Could not reach the form service. Please try again.'; });
+      };
+    });
+  }
+
+  // ---- load the form ----
+  function load(t) {
+    var preview = q.get('preview') === '1';
+    var bs = preview ? (ls('msaoa_s') || '') : '';
+    var s = ownerSess();
+    m.innerHTML = '<p>Loading your flat details…</p>';
+    var url = API + '?api=load&t=' + encodeURIComponent(t) + (preview ? '&preview=1' : '') + (s ? '&s=' + encodeURIComponent(s) : '') + (bs ? '&bs=' + encodeURIComponent(bs) : '');
+    fetch(url, { credentials: 'omit' })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res && res.login) return flatLogin(t, res);
+        if (!res || !res.ok) return fail((res && res.title) || 'Something went wrong', (res && res.text) || 'Please try again in a minute.');
+        var extra = JSON.stringify({ s: s, bs: bs });
+        var shim = '<script>var google={script:{run:(function(){function mk(o,b){return{withSuccessHandler:function(x){return mk(x,b)},withFailureHandler:function(x){return mk(o,x)},' +
+          'submitForm:function(t,d){var x=' + extra + ';fetch(' + JSON.stringify(API) + ',{method:"POST",body:JSON.stringify({t:t,data:d,s:x.s,bs:x.bs}),headers:{"Content-Type":"text/plain;charset=utf-8"},credentials:"omit"})' +
+          '.then(function(r){return r.json()}).then(o).catch(b)}}}return mk(function(){},function(){})})()}};<\/script>';
+        var BS = String.fromCharCode(92);
+        var data = JSON.stringify(res.payload).replace(/</g, BS + 'u003c').replace(new RegExp(String.fromCharCode(8232), 'g'), BS + 'u2028').replace(new RegExp(String.fromCharCode(8233), 'g'), BS + 'u2029');
+        var html = res.app
+          .replace('<?!= payloadJson ?>', function () { return data; })
+          .replace('<?!= logo ?>', function () { return res.logo; })
+          .replace('<head>', function () { return '<head>' + shim; });
+        document.open();
+        document.write(html);
+        document.close();
+      })
+      .catch(function () {
+        fail('Could not load your details', 'Please check your internet connection and open the link again. If it keeps failing, contact the MSAOA Board at mythrisignatureaoa@gmail.com.');
+      });
+  }
+
   var t = (q.get('t') || '').trim();
+  if (!t) return commonLogin();
   if (!/^[A-Za-z0-9]{12,40}$/.test(t)) {
     return fail('This link is not complete', 'Please open the full link exactly as it was sent to you on WhatsApp. If it still does not work, contact the MSAOA Board at mythrisignatureaoa@gmail.com.');
   }
-  fetch(API + '?api=load&t=' + encodeURIComponent(t) + (q.get('preview') === '1' ? '&preview=1' : ''), { credentials: 'omit' })
-    .then(function (r) { return r.json(); })
-    .then(function (res) {
-      if (!res || !res.ok) return fail((res && res.title) || 'Something went wrong', (res && res.text) || 'Please try again in a minute.');
-      var shim = '<script>var google={script:{run:(function(){function mk(o,b){return{withSuccessHandler:function(x){return mk(x,b)},withFailureHandler:function(x){return mk(o,x)},' +
-        'submitForm:function(t,d){fetch(' + JSON.stringify(API) + ',{method:"POST",body:JSON.stringify({t:t,data:d}),headers:{"Content-Type":"text/plain;charset=utf-8"},credentials:"omit"})' +
-        '.then(function(r){return r.json()}).then(o).catch(b)}}}return mk(function(){},function(){})})()}};<\/script>';
-      var BS = String.fromCharCode(92);
-      var data = JSON.stringify(res.payload).replace(/</g, BS + 'u003c').replace(new RegExp(String.fromCharCode(8232), 'g'), BS + 'u2028').replace(new RegExp(String.fromCharCode(8233), 'g'), BS + 'u2029');
-      var html = res.app
-        .replace('<?!= payloadJson ?>', function () { return data; })
-        .replace('<?!= logo ?>', function () { return res.logo; })
-        .replace('<head>', function () { return '<head>' + shim; });
-      document.open();
-      document.write(html);
-      document.close();
-    })
-    .catch(function () {
-      fail('Could not load your details', 'Please check your internet connection and open the link again. If it keeps failing, contact the MSAOA Board at mythrisignatureaoa@gmail.com.');
-    });
+  load(t);
 })();
 </script>
 </body>
