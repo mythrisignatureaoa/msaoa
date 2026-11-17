@@ -59,7 +59,7 @@ var API = "https://script.google.com/macros/s/AKfycbw0clxQoy5NM9268IiOUvMzaFQgqz
   // ---- code entry shared by both login screens ----
   function codeStep(intro, verifyBody, done) {
     var box = document.getElementById('step2');
-    box.innerHTML = '<p class="small">' + esc(intro) + '</p><input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code"><button class="btn" id="vb">Log in</button><div class="msg" id="vm"></div>';
+    box.innerHTML = '<p class="small">' + esc(intro) + '</p><input id="code" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code"><button class="btn" id="vb">Log in</button><div class="msg" id="vm"></div>';
     var code = document.getElementById('code'); code.focus();
     var go = function () {
       var c = code.value.trim(), vm = document.getElementById('vm');
@@ -74,13 +74,14 @@ var API = "https://script.google.com/macros/s/AKfycbw0clxQoy5NM9268IiOUvMzaFQgqz
     };
     document.getElementById('vb').onclick = go;
     code.onkeydown = function (e) { if (e.key === 'Enter') go(); };
+    code.oninput = function () { var d = code.value.replace(/\D/g, '').slice(0, 6); if (d !== code.value) code.value = d; if (d.length === 6 && !document.getElementById('vb').disabled) go(); };
   }
 
   // ---- common login page (no personal link) ----
   function commonLogin(note) {
     m.innerHTML = '<h2>Owner login</h2><p>Enter an email on record for your flat. We will send you a 6-digit code.</p>' +
       (note ? '<p class="msg">' + esc(note) + '</p>' : '') +
-      '<input id="em" type="email" autocomplete="email" placeholder="Your email"><button class="btn" id="sb">Send code</button><div class="msg" id="sm"></div><div id="step2"></div>' +
+      '<input id="em" type="email" inputmode="email" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="send" placeholder="Your email"><button class="btn" id="sb">Send code</button><div class="msg" id="sm"></div><div id="step2"></div>' +
       '<p class="small">Not submitted your details yet? Please use the personal link the Board sent you on WhatsApp.</p>';
     var em = document.getElementById('em');
     var send = function () {
