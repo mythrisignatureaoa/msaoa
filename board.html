@@ -24,6 +24,17 @@
   .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:14px; }
   .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 14px; cursor:pointer; }
   .card.on { outline:2px solid var(--gold); }
+  .issbar { display:flex; align-items:center; gap:10px; background:#fdecea; border:1px solid #f1b8b2; color:#8a1c12; border-radius:10px; padding:10px 14px; margin-bottom:12px; cursor:pointer; font-weight:600; }
+  .issbar.ok { background:#f3f6f4; border-color:var(--line); color:var(--muted); font-weight:400; }
+  .issbar .go { margin-left:auto; font-size:13px; font-weight:400; text-decoration:underline; }
+  .isslist { background:#fff; border:1px solid var(--line); border-radius:10px; margin:-4px 0 14px; }
+  .iss { padding:10px 14px; border-top:1px solid var(--line); display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start; }
+  .iss:first-child { border-top:0; }
+  .iss .what { flex:1 1 260px; min-width:0; }
+  .iss .k { font-weight:700; color:#8a1c12; } .iss.done { opacity:.55; } .iss.done .k { color:var(--muted); }
+  .iss .d { font-size:12px; color:var(--muted); word-break:break-word; } .iss .tip { font-size:13px; margin-top:3px; }
+  .iss .acts { display:flex; gap:6px; flex-wrap:wrap; }
+  .rdot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#d93025; margin-left:5px; vertical-align:middle; }
   .card .n { font-size:26px; font-weight:700; } .card .l { font-size:12px; color:var(--muted); }
   .blocks { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-bottom:14px; }
   .blk { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 14px; }
@@ -79,6 +90,30 @@ var API = "https://script.google.com/macros/s/AKfycbw0clxQoy5NM9268IiOUvMzaFQgqz
 var FORM = "https://mythrisignatureaoa.github.io/msaoa/";
 var app = document.getElementById('app');
 var SESS = '', DATA = null, sel = {}, filt = { q: '', block: '', status: '', fn: '' };
+var showIss = false, showDone = false;
+function openIss() { return (DATA.issues || []).filter(function (x) { return !x.handled; }); }
+function issFlats() { var o = {}; openIss().forEach(function (x) { if (x.flat) o[x.flat] = 1; }); return o; }
+function issHtml() {
+  var all = DATA.issues || [], open = openIss(), h = '';
+  if (!all.length) return '<div class="issbar ok">✓ No problems reported by owners in the last 7 days</div>';
+  h += open.length
+    ? '<div class="issbar" data-isst="1">⚠ ' + open.length + (open.length > 1 ? ' issues need' : ' issue needs') + ' attention<span class="go">' + (showIss ? 'Hide' : 'Show') + '</span></div>'
+    : '<div class="issbar ok" data-isst="1">✓ No open issues · ' + all.length + ' handled in the last 7 days<span class="go">' + (showIss ? 'Hide' : 'Show') + '</span></div>';
+  if (!showIss) return h;
+  var list = all.filter(function (x) { return showDone || !x.handled; });
+  h += '<div class="isslist">';
+  list.forEach(function (x) {
+    var f = x.flat && byFlat(x.flat);
+    h += '<div class="iss' + (x.handled ? ' done' : '') + '"><div class="what"><span class="k">' + (x.flat ? esc(x.flat) + ' · ' : '') + esc(x.kind) + '</span> <span class="small">' + esc(x.at) + '</span>' +
+      '<div class="d">' + esc(x.detail) + '</div><div class="tip">' + esc(x.tip) + '</div>' + (x.handled ? '<div class="d">✓ ' + esc(x.handled) + '</div>' : '') + '</div><div class="acts">' +
+      (f && f.mobile ? '<button class="btn wa" data-iswa="' + esc(x.id) + '">WhatsApp owner</button>' : '') +
+      (x.handled ? '' : '<button class="btn" data-isdone="' + esc(x.id) + '">Mark as handled</button>') + '</div></div>';
+  });
+  if (!list.length) h += '<div class="iss"><span class="small">No open issues.</span></div>';
+  var nd = all.length - open.length;
+  if (nd) h += '<div class="iss"><button class="btn" data-isshow="1">' + (showDone ? 'Hide' : 'Show') + ' handled (' + nd + ')</button></div>';
+  return h + '</div>';
+}
 function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} return null; }
 function local(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null'); localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} return null; }
 function esc(x) { return String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -181,7 +216,8 @@ function matches(f) {
 function render() {
   var all = DATA.flats, c = counts(all);
   var card = function (k, n, l) { return '<div class="card' + (filt.status === k ? ' on' : '') + '" data-st="' + k + '"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>'; };
-  var h = '<div class="cards">' + card('', c.total, 'All flats') + card('not', c.not, 'Not opened yet') + card('open', c.open, 'Opened, not submitted') +
+  var h = '<div id="issues">' + issHtml() + '</div>';
+  h += '<div class="cards">' + card('', c.total, 'All flats') + card('not', c.not, 'Not opened yet') + card('open', c.open, 'Opened, not submitted') +
     card('sub', c.sub, 'Submitted online') + card('pend', c.pend, 'Submitted, signed copy pending') + card('signed', c.signed, 'Signed copy received') + '</div>';
   h += '<div class="blocks">';
   ['A', 'B', 'C'].forEach(function (b) {
@@ -205,12 +241,12 @@ function render() {
 
 // The table only: redrawn while typing so the search boxes (and the phone keyboard) are left alone.
 function listHtml() {
-  var all = DATA.flats, list = all.filter(matches), h = '';
+  var all = DATA.flats, list = all.filter(matches), h = '', red = issFlats();
   h += '<table><thead><tr><th style="width:28px"></th><th>Flat</th><th>Owners</th><th>Status</th><th>Signed copy</th><th>Actions</th></tr></thead><tbody>';
   list.forEach(function (f) {
     var s = stOf(f), sub = s === 'Submitted';
     h += '<tr' + (sel[f.flat] ? ' class="sel"' : '') + '><td class="cb"><input type="checkbox" data-sel="' + esc(f.flat) + '"' + (sel[f.flat] ? ' checked' : '') + '></td>' +
-      '<td><div class="flat">' + esc(f.flat) + '</div><div class="small">' + esc(f.floor) + (f.deed ? '<br>' + esc(f.deed) : '') + '</div></td>' +
+      '<td><div class="flat">' + esc(f.flat) + (red[f.flat] ? '<span class="rdot" title="Open issue"></span>' : '') + '</div><div class="small">' + esc(f.floor) + (f.deed ? '<br>' + esc(f.deed) : '') + '</div></td>' +
       '<td>' + (esc(f.owners) || '<span class="small">—</span>') + '<div class="small">' + (f.mobile ? esc(f.mobile) : '<b style="color:#b42318">no mobile</b>') + (f.email ? ' · ' + esc(f.email) : '') + '</div></td>' +
       '<td>' + pill(f) + '<div class="small">' + (sub ? esc(f.submitted) + (f.count > 1 ? ' (' + esc(f.count) + '×)' : '') + (f.by ? '<br>by ' + esc(f.by) : '') : (f.opened ? 'opened ' + esc(f.opened) : '')) + '</div></td>' +
       '<td>' + (sub ? '<label class="sig"><input type="checkbox" data-sig="' + esc(f.flat) + '"' + (/^y/i.test(f.signed) ? ' checked' : '') + '> received</label><div class="small">' + esc(f.receivedOn) + '</div>' + (f.esign ? '<div class="small" style="color:' + (/^E-signed by all/.test(f.esign) ? '#1f7a4d' : '#b7791f') + '">✍ ' + esc(f.esign) + '</div>' : '') : '<span class="small">—</span>') + '</td>' +
@@ -302,7 +338,29 @@ function openPdf(flats) {
   }).catch(function (e) { if (w) w.close(); if (!e || e.message !== 'auth') toast('Could not reach the form service', 4000); });
 }
 
+function issRedraw() { var el = document.getElementById('issues'); if (el) el.innerHTML = issHtml(); renderList(); }
+function issClick(t) {
+  if (t.hasAttribute('data-isst')) { showIss = !showIss; return issRedraw(); }
+  if (t.hasAttribute('data-isshow')) { showDone = !showDone; return issRedraw(); }
+  var id = t.getAttribute('data-iswa') || t.getAttribute('data-isdone');
+  var x = (DATA.issues || []).find(function (i) { return i.id === id; });
+  if (!x) return;
+  if (t.hasAttribute('data-iswa')) {
+    var f = byFlat(x.flat); if (!f || !f.mobile) return;
+    var m = 'Hello, this is the MSAOA Board. We noticed you may have had some trouble with the Flat & Owner Details Form for Flat ' + x.flat + '. Can we help? You can reply here with what you see on the screen.';
+    return window.open('https://wa.me/' + waNum(f.mobile) + '?text=' + encodeURIComponent(m), '_blank');
+  }
+  t.disabled = true;
+  call({ action: 'issueDone', row: x.row }).then(function (res) {
+    if (!res.ok) { t.disabled = false; return toast(res.error || 'Could not save', 3500); }
+    (DATA.issues || []).forEach(function (i) { if (i.row === x.row) i.handled = res.handled; });
+    toast('Marked as handled'); issRedraw();
+  }).catch(function () { t.disabled = false; toast('Could not reach the form service', 3500); });
+}
+
 document.addEventListener('click', function (e) {
+  var ti = e.target.closest('[data-isst],[data-isshow],[data-iswa],[data-isdone]');
+  if (ti) return issClick(ti);
   var t = e.target.closest('[data-st],[data-wa],[data-copy],[data-pdf],#selall,#selnone,#print,#copyall,#qstart,#qopen,#qskip,#qstop,#qclose');
   if (!t) return;
   if (t.id === 'qstart') return qStart();
