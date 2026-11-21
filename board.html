@@ -189,13 +189,14 @@ function scen(f) {
   if (/^y/i.test(f.signed || '')) return 'paper';
   return 'sign';
 }
+var PAPER = '📄 *Prefer a paper form?* Download the blank form here, print it, fill it in by hand, sign it and hand it in at the MSAOA office room in the basement:\nhttps://mythrisignatureaoa.github.io/msaoa/blank-form.pdf\nPrinted copies are also available at the MSAOA office room in the basement to fill in and submit there.';
 function actsOf(f) {
   var sc = scen(f), name = f.owners || 'Owner', L = f.link, out = [];
   var ppl = f.people || [];
   if (sc === 'notopened') out.push({ kind: 'remind', label: 'Send reminder', mob: f.mobile, msg:
-    'Dear ' + name + ', a gentle reminder from the MSAOA Board 🙏 The Flat & Owner Details Form for Flat ' + f.flat + ' is still pending. It takes about 10 minutes, and most details are already filled in. Please complete it ' + byWhen() + ':\n' + L + '\nPrefer paper? A printed form is available at the Association office. Thank you!' });
+    'Dear ' + name + ', a gentle reminder from the MSAOA Board 🙏 The Flat & Owner Details Form for Flat ' + f.flat + ' is still pending. It takes about 10 minutes, and most details are already filled in. Please complete it ' + byWhen() + ':\n' + L + '\n\n' + PAPER + ' Thank you!' });
   else if (sc === 'opened') out.push({ kind: 'remind', label: 'Send reminder', mob: f.mobile, msg:
-    'Dear ' + name + ', thank you for opening the Flat & Owner Details Form for Flat ' + f.flat + '. It hasn\'t been submitted yet. Please open the same link, check the details and tap *Review & submit* ' + byWhen() + ':\n' + L + '\nNeed help? Just reply here. 🙏' });
+    'Dear ' + name + ', thank you for opening the Flat & Owner Details Form for Flat ' + f.flat + '. It hasn\'t been submitted yet. Please open the same link, check the details and tap *Review & submit* ' + byWhen() + ':\n' + L + '\n\n' + PAPER + ' Need help? Just reply here. 🙏' });
   else if (sc === 'allsigned') out.push({ kind: 'thanks', label: 'Send thank-you', mob: f.mobile, msg:
     'Dear ' + name + ', thank you! The Flat & Owner Details Form for Flat ' + f.flat + ' is complete and signed by all owners ✅ The signed copy has been emailed to you. Warm regards, MSAOA Board' });
   else if (sc === 'paper') out.push({ kind: 'thanks', label: 'Send thank-you', mob: f.mobile, msg:
