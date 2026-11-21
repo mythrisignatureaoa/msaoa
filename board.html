@@ -34,6 +34,7 @@
   .iss .k { font-weight:700; color:#8a1c12; } .iss.done { opacity:.55; } .iss.done .k { color:var(--muted); }
   .iss .d { font-size:12px; color:var(--muted); word-break:break-word; } .iss .tip { font-size:13px; margin-top:3px; }
   .iss .acts { display:flex; gap:6px; flex-wrap:wrap; }
+  .btn.wa.ghostwa { background:#fff; color:#1f7a4d; border-color:#9fd3b6; }
   .rdot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#d93025; margin-left:5px; vertical-align:middle; }
   .card .n { font-size:26px; font-weight:700; } .card .l { font-size:12px; color:var(--muted); }
   .blocks { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-bottom:14px; }
@@ -178,6 +179,56 @@ function pill(f) {
   var s = stOf(f), c = s === 'Submitted' ? 'p-sub' : s === 'Opened' ? 'p-open' : s === 'Locked' ? 'p-lock' : 'p-not';
   return '<span class="pill ' + c + '">' + esc(s) + '</span>';
 }
+// ---- status-based WhatsApp messages: one action per person who needs to do something ----
+function first(n) { return String(n || '').split(/\s+/)[0] || 'Owner'; }
+function byWhen() { return DATA.overdue ? 'as soon as possible' : 'by ' + DATA.returnBy; }
+function scen(f) {
+  var st = stOf(f);
+  if (st !== 'Submitted') return st === 'Opened' ? 'opened' : 'notopened';
+  if (/^E-signed by all/.test(f.esign || '')) return 'allsigned';
+  if (/^y/i.test(f.signed || '')) return 'paper';
+  return 'sign';
+}
+function actsOf(f) {
+  var sc = scen(f), name = f.owners || 'Owner', L = f.link, out = [];
+  var ppl = f.people || [];
+  if (sc === 'notopened') out.push({ kind: 'remind', label: 'Send reminder', mob: f.mobile, msg:
+    'Dear ' + name + ', a gentle reminder from the MSAOA Board 🙏 The Flat & Owner Details Form for Flat ' + f.flat + ' is still pending. It takes about 10 minutes, and most details are already filled in. Please complete it ' + byWhen() + ':\n' + L + '\nPrefer paper? A printed form is available at the Association office. Thank you!' });
+  else if (sc === 'opened') out.push({ kind: 'remind', label: 'Send reminder', mob: f.mobile, msg:
+    'Dear ' + name + ', thank you for opening the Flat & Owner Details Form for Flat ' + f.flat + '. It hasn\'t been submitted yet. Please open the same link, check the details and tap *Review & submit* ' + byWhen() + ':\n' + L + '\nNeed help? Just reply here. 🙏' });
+  else if (sc === 'allsigned') out.push({ kind: 'thanks', label: 'Send thank-you', mob: f.mobile, msg:
+    'Dear ' + name + ', thank you! The Flat & Owner Details Form for Flat ' + f.flat + ' is complete and signed by all owners ✅ The signed copy has been emailed to you. Warm regards, MSAOA Board' });
+  else if (sc === 'paper') out.push({ kind: 'thanks', label: 'Send thank-you', mob: f.mobile, msg:
+    'Dear ' + name + ', thank you! We have received the signed copy of the Flat & Owner Details Form for Flat ' + f.flat + ' ✅ Your details are now updated in the Owner Register. Warm regards, MSAOA Board' });
+  else {
+    var resign = /^Re-sign/.test(f.esign || ''), signedP = ppl.filter(function (p) { return p.signed; });
+    var pend = ppl.filter(function (p) { return !p.signed; });
+    if (!ppl.length) pend = [{ n: 1, name: name, mob: f.mobile, email: true }];
+    pend.forEach(function (p) {
+      var who = p.name || 'Owner', m, kind;
+      if (!p.email) {
+        kind = 'email'; m = 'Dear ' + who + ', to sign the form for Flat ' + f.flat + ' online we need your email address, because the signing code is sent there. Please reply here with your email and we\'ll add it. Or sign the paper copy: tap "Email me the PDF" here, or collect a printed copy from the office:\n' + L;
+      } else if (resign) {
+        kind = 'resign'; m = 'Dear ' + who + ', the details for Flat ' + f.flat + ' were updated after signing, so the form needs to be signed again by all owners. Please open the link and tap *Sign online* next to your name:\n' + L + '\nThank you for keeping the details up to date! 🙏';
+      } else if (signedP.length) {
+        kind = 'sign'; m = 'Dear ' + who + ', the form for Flat ' + f.flat + ' has been submitted and ' + signedP.map(function (x) { return x.name; }).join(' & ') + ' has already signed ✅ Only your signature is pending. Please open the link, tap *Sign online* next to your name, and confirm with the code sent to your email:\n' + L + '\nThank you! 🙏';
+      } else {
+        kind = 'sign'; m = 'Dear ' + who + ', thank you for submitting the form for Flat ' + f.flat + ' ✅ One last step: each owner signs once. Open the link, tap *Sign online* next to your name, draw your signature and confirm with the code sent to your email:\n' + L + '\nPrefer paper? Tap "Email me the PDF" on the same page, sign the printout and hand it in at the office.';
+      }
+      var verb = kind === 'email' ? 'Ask ' + first(who) + ' for email' : 'Ask ' + first(who) + ' to sign' + (kind === 'resign' ? ' again' : '');
+      var mob = p.mob, via = '';
+      if (!mob && f.mobile) { mob = f.mobile; via = ' (via Owner 1)'; m = '(Please pass this on to ' + who + '.)\n\n' + m; }
+      out.push({ kind: kind, label: verb + via, mob: mob, msg: m });
+    });
+  }
+  return out;
+}
+function waOpen(f, i) {
+  var a = actsOf(f)[i]; if (!a || !a.mob) return;
+  window.open('https://wa.me/' + waNum(a.mob) + '?text=' + encodeURIComponent(a.msg), '_blank');
+  sent[f.flat] = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); local('msaoa_sent', sent);
+}
+function allMsgs(f) { return actsOf(f).map(function (a) { return a.msg; }).join('\n\n---\n\n'); }
 function waNum(m) { m = String(m || '').replace(/\D/g, ''); if (m.length === 10) return '91' + m; if (m.length === 11 && m[0] === '0') return '91' + m.slice(1); return m; }
 
 function counts(list) {
@@ -251,10 +302,10 @@ function listHtml() {
       '<td>' + pill(f) + '<div class="small">' + (sub ? esc(f.submitted) + (f.count > 1 ? ' (' + esc(f.count) + '×)' : '') + (f.by ? '<br>by ' + esc(f.by) : '') : (f.opened ? 'opened ' + esc(f.opened) : '')) + '</div></td>' +
       '<td>' + (sub ? '<label class="sig"><input type="checkbox" data-sig="' + esc(f.flat) + '"' + (/^y/i.test(f.signed) ? ' checked' : '') + '> received</label><div class="small">' + esc(f.receivedOn) + '</div>' + (f.esign ? '<div class="small" style="color:' + (/^E-signed by all/.test(f.esign) ? '#1f7a4d' : '#b7791f') + '">✍ ' + esc(f.esign) + '</div>' : '') : '<span class="small">—</span>') + '</td>' +
       '<td><div class="acts">' +
-        '<button class="btn wa" data-wa="' + esc(f.flat) + '"' + (f.mobile && f.link ? '' : ' disabled') + '>WhatsApp</button>' +
+        actsOf(f).map(function (a, i) { return '<button class="btn wa' + (a.kind === 'thanks' ? ' ghostwa' : '') + '" data-wa="' + esc(f.flat) + '" data-wi="' + i + '"' + (a.mob && f.link ? '' : ' disabled title="No WhatsApp number"') + '>' + esc(a.label) + (a.mob ? '' : ' · No number') + '</button>'; }).join('') +
         '<button class="btn" data-copy="' + esc(f.flat) + '">Copy message</button>' +
         '<a class="btn" target="_blank" rel="noopener" href="' + esc(f.preview) + '">View form</a>' +
-        '<button class="btn" data-pdf="' + esc(f.flat) + '"' + (sub ? '' : ' disabled title="Owner has not submitted yet"') + '>PDF</button>' +
+        '<button class="btn" data-pdf="' + esc(f.flat) + '"' + (sub ? '' : ' disabled title="Owner has not submitted yet"') + '>' + (scen(f) === 'allsigned' || scen(f) === 'paper' ? 'Open PDF' : 'PDF') + '</button>' +
       '</div>' + (sent[f.flat] ? '<div class="sent">✓ messaged ' + esc(sent[f.flat]) + ' (this device)</div>' : '') + '</td></tr>';
   });
   if (!list.length) h += '<tr><td colspan="6" class="small" style="padding:20px;text-align:center">No flats match.</td></tr>';
@@ -279,34 +330,40 @@ function fallbackCopy(t) { var a = document.createElement('textarea'); a.value =
 var Q = null; // { list:[flat], i:index, done:{flat:1}, skipped:{flat:1} }
 function qSave() { if (Q) local('msaoa_q', Q); else store('msaoa_q', null); }
 function qStart() {
-  var ks = Object.keys(sel).sort(), ok = [], nomob = [];
-  ks.forEach(function (k) { var r = byFlat(k); if (!r) return; if (r.mobile && r.link) ok.push(k); else nomob.push(k); });
-  if (!ok.length) return toast('None of the selected flats has a mobile number', 3500);
-  var prev = ok.filter(function (k) { return sent[k]; });
+  var ks = Object.keys(sel).sort(), ok = [], nomob = [], done = 0;
+  ks.forEach(function (k) {
+    var r = byFlat(k); if (!r) return;
+    if (!actsOf(r).some(function (a) { return a.kind !== 'thanks'; })) { done++; return; }
+    actsOf(r).forEach(function (a, i) { if (a.kind === 'thanks') return; if (a.mob && r.link) ok.push(k + '#' + i); else nomob.push(k); });
+  });
+  if (!ok.length) return toast(done ? 'The selected flats are already complete. Nothing to send.' : 'None of the selected flats has a mobile number', 3500);
+  if (done) toast(done + ' completed flat(s) skipped', 3000);
+  var prev = ok.filter(function (k) { return sent[k.split('#')[0]]; });
   Q = { list: ok, i: 0, done: {}, skipped: {}, nomob: nomob, prevCount: prev.length, skipPrev: false };
   qSave(); qShow();
 }
 function qCur() { return Q && Q.i < Q.list.length ? Q.list[Q.i] : null; }
 function qAdvance() {
-  while (Q.i < Q.list.length && (Q.done[Q.list[Q.i]] || Q.skipped[Q.list[Q.i]] || (Q.skipPrev && sent[Q.list[Q.i]]))) Q.i++;
+  while (Q.i < Q.list.length && (Q.done[Q.list[Q.i]] || Q.skipped[Q.list[Q.i]] || (Q.skipPrev && sent[Q.list[Q.i].split('#')[0]]))) Q.i++;
 }
 function qShow() {
   var old = document.getElementById('qpanel'); if (old) old.remove();
   if (!Q || !DATA) return;
   qAdvance(); qSave();
-  var n = Q.list.length, nd = Object.keys(Q.done).length, f = qCur(), r = f && byFlat(f), h;
+  var n = Q.list.length, nd = Object.keys(Q.done).length, key = qCur(), f = key && key.split('#')[0], r = f && byFlat(f), a = r && actsOf(r)[Number(key.split('#')[1] || 0)], h;
+  if (key && !a) { Q.skipped[key] = 1; Q.i++; return qShow(); }
   h = '<div class="qpanel" id="qpanel"><div class="qbox">';
   if (!f) {
     var sk = Object.keys(Q.skipped).length;
-    h += '<h3>All done</h3><div class="small">Opened WhatsApp for ' + nd + ' of ' + n + ' owner' + (n === 1 ? '' : 's') + (sk ? ', skipped ' + sk : '') + '.</div>' +
+    h += '<h3>All done</h3><div class="small">Opened WhatsApp for ' + nd + ' of ' + n + ' message' + (n === 1 ? '' : 's') + (sk ? ', skipped ' + sk : '') + '.</div>' +
       (Q.nomob.length ? '<p class="small" style="color:#b42318">No mobile number, not included: ' + esc(Q.nomob.join(', ')) + '</p>' : '') +
       '<div class="qbtns"><button class="btn pri" id="qclose">Close</button></div>';
   } else {
     h += '<h3>Send WhatsApp · ' + (nd + 1) + ' of ' + n + '</h3>' +
       '<div class="qprog"><span style="width:' + (100 * nd / n) + '%"></span></div>' +
-      '<div><span class="flat">' + esc(f) + '</span> · ' + esc(r.owners || '') + '</div>' +
-      '<div class="small">' + esc(r.mobile) + (sent[f] ? ' · <b style="color:#b45309">already messaged ' + esc(sent[f]) + ' from this device</b>' : '') + '</div>' +
-      '<div class="qmsg">' + esc(r.msg) + '</div>' +
+      '<div><span class="flat">' + esc(f) + '</span> · ' + esc(a.label) + '</div>' +
+      '<div class="small">' + esc(a.mob) + (sent[f] ? ' · <b style="color:#b45309">already messaged ' + esc(sent[f]) + ' from this device</b>' : '') + '</div>' +
+      '<div class="qmsg">' + esc(a.msg) + '</div>' +
       (Q.prevCount ? '<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="qskipprev"' + (Q.skipPrev ? ' checked' : '') + '> Skip flats already messaged from this device (' + Q.prevCount + ')</label>' : '') +
       '<div class="qbtns"><button class="btn wa" id="qopen">Open WhatsApp for ' + esc(f) + '</button></div>' +
       '<div class="qbtns"><button class="btn" id="qskip">Skip this flat</button><button class="btn" id="qstop">Stop</button></div>' +
@@ -316,10 +373,9 @@ function qShow() {
   document.body.insertAdjacentHTML('beforeend', h);
 }
 function qOpen() {
-  var f = qCur(), r = f && byFlat(f); if (!r) return;
-  window.open('https://wa.me/' + waNum(r.mobile) + '?text=' + encodeURIComponent(r.msg), '_blank');
-  sent[f] = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); local('msaoa_sent', sent);
-  Q.done[f] = 1; Q.i++; qSave(); render(); qShow();
+  var key = qCur(), f = key && key.split('#')[0], r = f && byFlat(f); if (!r) return;
+  waOpen(r, Number(key.split('#')[1] || 0));
+  Q.done[key] = 1; Q.i++; qSave(); render(); qShow();
 }
 function qEnd() { Q = null; qSave(); var p = document.getElementById('qpanel'); if (p) p.remove(); render(); }
 
@@ -371,12 +427,11 @@ document.addEventListener('click', function (e) {
   if (t.hasAttribute('data-st')) { filt.status = t.getAttribute('data-st'); return render(); }
   var f;
   if ((f = t.getAttribute('data-wa'))) {
-    var r = byFlat(f); if (!r || !r.mobile) return;
-    window.open('https://wa.me/' + waNum(r.mobile) + '?text=' + encodeURIComponent(r.msg), '_blank');
-    sent[f] = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); local('msaoa_sent', sent);
+    var r = byFlat(f); if (!r) return;
+    waOpen(r, Number(t.getAttribute('data-wi') || 0));
     return render();
   }
-  if ((f = t.getAttribute('data-copy'))) { var r2 = byFlat(f); return copy(r2.msg); }
+  if ((f = t.getAttribute('data-copy'))) { var r2 = byFlat(f); return copy(allMsgs(r2)); }
   if ((f = t.getAttribute('data-pdf'))) return openPdf([f]);
   if (t.id === 'selall') { DATA.flats.filter(matches).forEach(function (x) { sel[x.flat] = 1; }); return render(); }
   if (t.id === 'selnone') { sel = {}; return render(); }
@@ -389,7 +444,7 @@ document.addEventListener('click', function (e) {
     return openPdf(ks.sort());
   }
   if (t.id === 'copyall') {
-    return copy(Object.keys(sel).sort().map(function (k) { var r4 = byFlat(k); return r4 ? 'Flat ' + k + ' (' + (r4.mobile || 'no mobile') + '):\n' + r4.msg : ''; }).join('\n\n----------\n\n'));
+    return copy(Object.keys(sel).sort().map(function (k) { var r4 = byFlat(k); return r4 ? actsOf(r4).map(function (a) { return 'Flat ' + k + ' (' + (a.mob || 'no mobile') + '):\n' + a.msg; }).join('\n\n') : ''; }).join('\n\n----------\n\n'));
   }
 });
 document.addEventListener('change', function (e) {
